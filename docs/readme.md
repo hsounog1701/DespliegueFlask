@@ -1,54 +1,45 @@
 # Despliegue de Flask con Gunicorn y Nginx
 
-Este repositorio contiene la documentación para desplegar una aplicación Flask utilizando Gunicorn como servidor de aplicaciones y Nginx como proxy inverso.
+Guía práctica para desplegar una aplicación Flask usando Gunicorn como servidor de aplicaciones y Nginx como proxy inverso.
 
-## Requisitos previos
+## Requisitos
 
 - Sistema Debian/Ubuntu
-- Python 3
-- Nginx
-- Permisos de administrador
+- Python 3 y pip
+- Nginx instalado
+- Permisos de sudo
 
-## Instalación de dependencias
+## Instalación inicial
 
 ```bash
-# Actualizar el sistema e instalar pip
+# Actualizar sistema e instalar dependencias
 sudo apt-get update && sudo apt-get install -y python3-pip
+pip3 install pipenv python-dotenv
 
-# Instalar pipenv
-pip3 install pipenv
-
-# Verificar instalación
-PATH=$PATH:/home/$USER/.local/bin
-pipenv --version
-
-# Instalar python-dotenv
-pip3 install python-dotenv
+# Añadir pipenv al PATH
+export PATH=$PATH:/home/$USER/.local/bin
 ```
 
 ## Configuración del proyecto
 
-### 1. Crear estructura de directorios
+### 1. Estructura de directorios
 
 ```bash
-# Crear directorio del proyecto
 sudo mkdir -p /var/www/app
-
-# Cambiar permisos
 sudo chown -R $USER:www-data /var/www/app
 sudo chmod -R 775 /var/www/app
 ```
 
-### 2. Configurar variables de entorno
+### 2. Variables de entorno
 
-Crear archivo `/var/www/app/.env`:
+Crea el archivo `/var/www/app/.env`:
 
-```bash
+```
 FLASK_APP=wsgi.py
 FLASK_ENV=production
 ```
 
-### 3. Crear entorno virtual e instalar dependencias
+### 3. Instalar dependencias
 
 ```bash
 cd /var/www/app
@@ -56,10 +47,9 @@ pipenv shell
 pipenv install flask gunicorn
 ```
 
-### 4. Crear la aplicación Flask
+### 4. Aplicación Flask
 
-**Archivo `/var/www/app/application.py`:**
-
+**application.py:**
 ```python
 from flask import Flask
 
@@ -67,12 +57,10 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    '''Index page route'''
     return '<h1>App desplegada</h1>'
 ```
 
-**Archivo `/var/www/app/wsgi.py`:**
-
+**wsgi.py:**
 ```python
 from application import app
 
@@ -80,49 +68,42 @@ if __name__ == '__main__':
    app.run(debug=False)
 ```
 
-### 5. Probar la aplicación
+### 5. Prueba local
 
 ```bash
-# Con Flask (desarrollo)
+# Desarrollo
 flask run --host '0.0.0.0'
 
-# Con Gunicorn (producción)
+# Producción
 gunicorn --workers 4 --bind 0.0.0.0:5000 wsgi:app
 ```
 
-## Configuración de Gunicorn como servicio
+## Servicio systemd
 
-### 1. Obtener ruta de Gunicorn
-
+Primero, obtén la ruta de Gunicorn:
 ```bash
 which gunicorn
-# Ejemplo: /home/vagrant/.local/share/virtualenvs/app-1lvW3LzD/bin/gunicorn
 ```
 
-### 2. Crear servicio systemd
-
-Crear archivo `/etc/systemd/system/flask_app.service`:
+Crea `/etc/systemd/system/flask_app.service` (ajusta las rutas según tu instalación):
 
 ```ini
 [Unit]
-Description=flask app service - App con flask y Gunicorn
+Description=Servicio Flask con Gunicorn
 After=network.target
 
 [Service]
 User=vagrant
 Group=www-data
-Environment="PATH=/home/vagrant/.local/share/virtualenvs/app-1lvW3LzD/bin"
+Environment="PATH=/home/vagrant/.local/share/virtualenvs/app-XXXXX/bin"
 WorkingDirectory=/var/www/app
-ExecStart=/home/vagrant/.local/share/virtualenvs/app-1lvW3LzD/bin/gunicorn --workers 3 --bind unix:/var/www/app/app.sock wsgi:app
+ExecStart=/home/vagrant/.local/share/virtualenvs/app-XXXXX/bin/gunicorn --workers 3 --bind unix:/var/www/app/app.sock wsgi:app
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-**⚠️ Nota:** Ajustar las rutas según tu instalación.
-
-### 3. Iniciar el servicio
-
+Activa el servicio:
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable flask_app
@@ -131,9 +112,7 @@ sudo systemctl start flask_app
 
 ## Configuración de Nginx
 
-### 1. Crear configuración del sitio
-
-Crear archivo `/etc/nginx/sites-available/app.conf`:
+Crea `/etc/nginx/sites-available/app.conf`:
 
 ```nginx
 server {
@@ -150,90 +129,38 @@ server {
 }
 ```
 
-### 2. Activar el sitio
-
+Activa la configuración:
 ```bash
-# Crear enlace simbólico
 sudo ln -s /etc/nginx/sites-available/app.conf /etc/nginx/sites-enabled/
-
-# Verificar configuración
 sudo nginx -t
-
-# Reiniciar Nginx
 sudo systemctl restart nginx
-sudo systemctl status nginx
 ```
 
-### 3. Configurar hosts (local)
+### Configurar hosts localmente
 
-Editar `/etc/hosts` (Linux) o `C:\Windows\System32\drivers\etc\hosts` (Windows):
-
+Añade a `/etc/hosts` (Linux) o `C:\Windows\System32\drivers\etc\hosts` (Windows):
 ```
 192.168.X.X app.izv www.app.izv
 ```
 
 ## Verificación
 
-Acceder desde el navegador a: `http://app.izv/`
-
-Deberías ver: **App desplegada**
+Accede a http://app.izv/ y deberías ver tu aplicación funcionando.
 
 ---
 
-## Tarea de ampliación
+## Ampliación: Desplegar otro proyecto
 
-Repetir el proceso con el repositorio:
-```
-https://github.com/Azure-Samples/msdocs-python-flask-webapp-quickstart
-```
-
-### Pasos específicos:
+Para desplegar el proyecto de ejemplo de Azure:
 
 ```bash
-# Clonar repositorio
 cd /var/www
 git clone https://github.com/Azure-Samples/msdocs-python-flask-webapp-quickstart
-
-# Navegar al directorio
 cd msdocs-python-flask-webapp-quickstart
 
-# Crear entorno virtual e instalar dependencias
 pipenv shell
 pipenv install -r requirements.txt
-
-# Iniciar Gunicorn
 gunicorn --workers 4 --bind 0.0.0.0:5000 wsgi:app
 ```
 
-El resto del proceso es idéntico, solo ajusta los paths en la configuración de systemd y nginx.
-
----
-
-## Tecnologías utilizadas
-
-- **Python** - Lenguaje de programación
-- **Flask** - Framework web ligero
-- **Gunicorn** - Servidor WSGI para Python
-- **Nginx** - Servidor web y proxy inverso
-- **Pipenv** - Gestor de entornos virtuales
-
-## Estructura del proyecto
-
-```
-/var/www/app/
-├── .env
-├── application.py
-├── wsgi.py
-└── Pipfile
-```
-
-## Referencias
-
-- [Flask Documentation](https://flask.palletsprojects.com/)
-- [Gunicorn Documentation](https://gunicorn.org/)
-- [Nginx Documentation](https://nginx.org/en/docs/)
-- [Pipenv Documentation](https://pipenv.pypa.io/)
-
-## Autor
-
-Higor De Souza Nogueira Eufrasio - 2026
+Luego sigue los mismos pasos de configuración de systemd y Nginx, ajustando las rutas correspondientes.
